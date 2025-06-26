@@ -1,21 +1,14 @@
 #!/bin/bash
 
-
-
 backup_home_item() {
     local item="$1"
     local home_dir="$HOME"
     local backup_dir="$home_dir/.bak"
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    # Check if HOME exists and argument is given
+    # Check if item is provided
     if [[ -z "$item" ]]; then
         echo "Usage: backup_home_item <relative_path_to_item_in_HOME>"
-        return 1
-    fi
-
-    if [[ ! -d "$home_dir" ]]; then
-        echo "HOME directory does not exist."
         return 1
     fi
 
@@ -26,17 +19,23 @@ backup_home_item() {
     local backup_target="$backup_dir/$item"
     local source_in_script_dir="$script_dir/$item"
 
-    # Check if source exists
-    if [[ ! -e "$source_in_script_dir" ]]; then
+    # Backup existing file from $HOME if it exists
+    if [[ -e "$target_in_home" ]]; then
+        cp -ar "$target_in_home" "$backup_target"
+        echo "Backed up '$item' from home directory to '$backup_target'."
+    else
+        echo "No existing '$item' found in home directory to back up."
+    fi
+
+    # Copy new version from script directory to $HOME
+    if [[ -e "$source_in_script_dir" ]]; then
+        cp -ar "$source_in_script_dir" "$target_in_home"
+        echo "Copied '$item' from script directory to home directory."
+    else
         echo "Source item '$source_in_script_dir' does not exist."
         return 1
     fi
-
-    cp -ar "$source_in_script_dir" "$backup_target"
-
-    echo "Backed up '$item' from script directory to '$backup_target'."
 }
-
 
 install_ohmyzsh_plugin() {
     local plugin_repo="$1"
@@ -61,9 +60,7 @@ install_ohmyzsh_plugin() {
     fi
 
     # Extract plugin name from repo URL (last part, without .git)
-    local plugin_name
-    plugin_name="$(basename -s .git "$plugin_repo")"
-
+    local plugin_name="$(basename -s .git "$plugin_repo")"
     local target_dir="$plugin_dir/$plugin_name"
 
     # If already exists, skip
@@ -74,7 +71,6 @@ install_ohmyzsh_plugin() {
 
     # Clone the plugin
     git clone "$plugin_repo" "$target_dir"
-
     if [[ $? -eq 0 ]]; then
         echo "Successfully installed '$plugin_name' into '$target_dir'."
     else
@@ -83,30 +79,21 @@ install_ohmyzsh_plugin() {
     fi
 }
 
-
-# check if zsh is installed
+# Check if zsh is installed
 if ! command -v zsh >/dev/null 2>&1; then
-  echo "Zsh is not installed. Exiting script."
-  exit 1
-else
-  echo "Zsh is installed. Switching to Zsh..."
-  exec zsh
+    echo "Zsh is not installed. Exiting script."
+    exit 1
 fi
 
+# Install Oh My Zsh
+RUNZSH="no" CHSH="yes" sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
 
-# install oh my zsh
-sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
+# Backup existing config files and apply new ones
+backup_home_item ".zshrc"
+backup_home_item ".tmux.conf"
 
-# copy zsh and tmux config
-backup_home_item(".zshrc")
-backup_home_item(".tmux.conf")
-
-#install oh my zsh plugins
-
-install_ohmyzsh_plugin("https://github.com/zdharma-continuum/fast-syntax-highlighting.git")
-install_ohmyzsh_plugin("https://github.com/marlonrichert/zsh-autocomplete.git")
-install_ohmyzsh_plugin("https://github.com/zsh-users/zsh-autosuggestions.git")
-install_ohmyzsh_plugin("https://github.com/zsh-users/zsh-syntax-highlighting.git")
-
-#change login shell
-chsh -s /bin/zsh 
+# Install Oh My Zsh plugins
+install_ohmyzsh_plugin "https://github.com/zdharma-continuum/fast-syntax-highlighting.git"
+install_ohmyzsh_plugin "https://github.com/marlonrichert/zsh-autocomplete.git"
+install_ohmyzsh_plugin "https://github.com/zsh-users/zsh-autosuggestions.git"
+install_ohmyzsh_plugin "https://github.com/zsh-users/zsh-syntax-highlighting.git"
